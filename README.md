@@ -1,52 +1,38 @@
-# Julia Set Audio Visualizer
+# sv
 
-This is a SvelteKit implementation of the Julia set fractal visualizer that reacts to audio input in real-time with ultra-low latency.
+Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
 
-## Features
+## Creating a project
 
-- Real-time audio visualization using the Web Audio API
-- WebGL-based Julia set fractal rendering
-- Responsive and high-performance design
-- Keyboard controls for interactive parameter adjustment
-- Frequency analysis for bass, mid, and treble components
-- Multiple fractal modes
+If you're seeing this, you've probably already done this step. Congrats!
 
-## Controls
+```sh
+# create a new project in the current directory
+npx sv create
 
-- **M** - Cycle through fractal modes (0-3)
-- **,/.** - Decrease/increase fractal speed
-- **-/=** - Decrease/increase color intensity
-- **Q/W** - Decrease/increase red intensity
-- **A/S** - Decrease/increase green intensity
-- **Z/X** - Decrease/increase blue intensity
-- **E/R** - Decrease/increase zoom intensity
+# create a new project in my-app
+npx sv create my-app
+```
 
-## Performance Optimizations
+## Developing
 
-- WebGL for hardware-accelerated graphics
-- Efficient audio processing using Web Audio API
-- Throttled and optimized render loop
-- Responsive canvas sizing
-- Minimal state updates
+Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
 
-## Browser Requirements
-
-- Modern browser with WebGL and Web Audio API support
-- Audio permission is required (click anywhere to enable)
-
-## Running the project
-
-```bash
-# Install dependencies
-npm install
-
-# Start the development server
+```sh
 npm run dev
 
-# Build for production
+# or start the server and open the app in a new browser tab
+npm run dev -- --open
+```
+
+## Building
+
+To create a production version of your app:
+
+```sh
 npm run build
 ```
 
-## Notes
+You can preview the production build with `npm run preview`.
 
-The Web Audio API can only access microphone audio by default. For true system audio capture (like in the original Python implementation), you would need a browser extension or native companion app.
+> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
