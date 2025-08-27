@@ -20,8 +20,9 @@
   let zoom = 1;
   let color = [1, 1, 1];
   let arg = 0;
+  let renderData: any;
 
-  onMount(() => {
+  onMount(async () => {
     if (!canvasEl) return;
 
     const handleResize = () => {
@@ -36,7 +37,7 @@
 
     sandbox = new GlslCanvas(canvasEl);
     sandbox.load(fragShaderSource);
-    sandbox.setUniform('zoom', 4.0);
+    sandbox.setUniform('zoom', 4);
 
     let mouseX = 0;
     let mouseY = 0;
@@ -51,9 +52,9 @@
     // Visual render loop
     const render = () => {
       // Update audio
-      audioData = audioController.update();
-      if (audioData) {
-        color = audioData.color;
+      renderData = audioController.renderData;
+      if (renderData) {
+        color = renderData.color;
       }
 
       // const a = performance.now() * 0.001 + Math.PI * 0.75;
@@ -61,20 +62,24 @@
 
       // const a = Math.PI * 1.0 + Math.sin(performance.now() * 0.0005) * 1.0;
       // const a = Math.PI * 1.5;
-      if (audioData) arg += audioData?.volume;
-      const a = Math.PI * 1.0 + Math.sin(arg * 0.1) * 1.0;
-      const c = [0.7885 * Math.cos(a), 0.7885 * Math.sin(a)];
+      if (audioData) arg += (audioData?.volume * 0.1) ** 4 * 2000;
+      const a = Math.PI + Math.sin(arg * 0.1) * 2.0;
+      let c = [0.7885 * Math.cos(a), 0.7885 * Math.sin(a)];
       // const color = [0.1, 0.5, 0.4];
 
       // let c = [-0.835, -0.2321];
       // c[0] += Math.cos(a) * 0.1;
       // c[1] += Math.sin(a) * 0.1;
 
+      // c = [0, 0];
+      sandbox.setUniform('zoom', 4 + renderData?.volume ** 2 * 10);
       sandbox.setUniform('c', c[0], c[1]);
       sandbox.setUniform('color', color[0], color[1], color[2]);
       renderLoopId = requestAnimationFrame(render);
     };
-    renderLoopId = requestAnimationFrame(render);
+
+    // renderLoopId = requestAnimationFrame(render);
+    setTimeout(() => render(), 1000);
   });
 
   onDestroy(() => {
@@ -85,10 +90,10 @@
 
 <main class="relative flex h-full w-full bg-black">
   <div class="absolute top-4 left-4 rounded-md text-white tabular-nums">
-    <p>bass: {audioData?.color[0].toFixed(3)}</p>
-    <p>mid: {audioData?.color[1].toFixed(3)}</p>
-    <p>treble: {audioData?.color[2].toFixed(3)}</p>
-    <p>energy: {audioData?.volume.toFixed(3)}</p>
+    <p>bass: {color[0].toFixed(3)}</p>
+    <p>mid: {color[1].toFixed(3)}</p>
+    <p>treble: {color[2].toFixed(3)}</p>
+    <p>energy: {renderData?.volume.toFixed(3)}</p>
   </div>
   <canvas class="glslCanvas h-full w-full" bind:this={canvasEl}></canvas>
 </main>

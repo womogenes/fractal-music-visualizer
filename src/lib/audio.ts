@@ -6,7 +6,15 @@ export class AudioController {
   audioCtx: AudioContext | undefined;
   analyzer: AnalyserNode | undefined;
   source: MediaStreamAudioSourceNode | undefined;
-  dataArray: Uint8Array = new Uint8Array();
+  freqDataArray: Uint8Array = new Uint8Array();
+  workletNode!: AudioWorkletNode;
+  lastAudioData: { color: number[]; volume: number } | null = null;
+  updateCallbacks: ((data: { color: number[]; volume: number }) => void)[] = [];
+
+  renderData: { color: number[]; volume: number } = {
+    color: [0, 0, 0],
+    volume: 0,
+  };
 
   isReady: boolean = false;
 
@@ -17,31 +25,53 @@ export class AudioController {
   constructor() {
     console.log('Initialized AudioController');
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      this.audioCtx = new window.AudioContext();
-      this.source = this.audioCtx.createMediaStreamSource(stream);
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then(async (stream) => {
+        // Request low latency for the audio context
+        this.audioCtx = new (window.AudioContext ||
+          (window as any).webkitAudioContext)({
+          latencyHint: 'interactive',
+        });
 
-      this.analyzer = this.audioCtx.createAnalyser();
-      this.analyzer.fftSize = this.FFT_SIZE;
+        await this.audioCtx.audioWorklet.addModule('audio-processor.js');
 
-      this.source.connect(this.analyzer);
+        this.source = this.audioCtx.createMediaStreamSource(stream);
 
-      const bufferLen = this.analyzer.frequencyBinCount;
-      this.dataArray = new Uint8Array(bufferLen);
+        this.analyzer = this.audioCtx.createAnalyser();
+        this.analyzer.fftSize = this.FFT_SIZE;
+        this.analyzer.smoothingTimeConstant = 0.8;
 
-      // Make kernels
-      for (let [filterArr, mean, std] of [
-        [200, 300, this.bassFilter],
-        [1000, 500, this.midFilter],
-        [10000, 1000, this.trebleFilter],
-      ]) {
-        // @ts-ignore
-        this.createGuassianKernel(filterArr, mean, std);
-      }
+        this.workletNode = new AudioWorkletNode(
+          this.audioCtx,
+          'audio-analyzer-processor',
+        );
 
-      this.isReady = true;
-      console.log('Audio setup complete');
-    });
+        this.workletNode.port.onmessage = (event) => {
+          if (!event.data) return;
+          this.processData();
+        };
+
+        this.source.connect(this.analyzer);
+        this.analyzer.connect(this.workletNode);
+        // this.workletNode.connect(this.audioCtx.destination);
+
+        const bufferLen = this.analyzer.frequencyBinCount;
+        this.freqDataArray = new Uint8Array(bufferLen);
+
+        // Make kernels
+        for (let [filterArr, mean, std] of [
+          [200, 300, this.bassFilter],
+          [1000, 500, this.midFilter],
+          [10000, 1000, this.trebleFilter],
+        ]) {
+          // @ts-ignore
+          this.createGuassianKernel(filterArr, mean, std);
+        }
+
+        this.isReady = true;
+        console.log('Audio setup complete');
+      });
   }
 
   createGuassianKernel(mean: number, std: number, out: Uint8Array) {
@@ -56,29 +86,33 @@ export class AudioController {
     }
   }
 
-  update() {
+  processData() {
     if (!this.isReady) return;
 
-    this.analyzer?.getByteFrequencyData(this.dataArray);
+    // this.analyzer?.getByteFrequencyData(this.dataArray);
+    this.analyzer?.getByteFrequencyData(this.freqDataArray);
 
-    // console.log(this.dataArray.slice(0, 10));
-    // console.log(this.bassFilter.slice(0, 10));
-    // console.log(this.bassFilter);
+    // Optimized energy calculation using for loops instead of reduce
+    let bassSum = 0,
+      midSum = 0,
+      trebleSum = 0;
+    const length = this.freqDataArray.length;
 
-    const bassEnergy =
-      this.dataArray.reduce((l, r, i) => l + r * this.bassFilter[i], 0) /
-      this.dataArray.length;
-    const midEnergy =
-      this.dataArray.reduce((l, r, i) => l + r * this.midFilter[i], 0) /
-      this.dataArray.length;
-    const trebleEnergy =
-      this.dataArray.reduce((l, r, i) => l + r * this.trebleFilter[i], 0) /
-      this.dataArray.length;
+    for (let i = 0; i < length; i++) {
+      const value = this.freqDataArray[i];
+      bassSum += value * this.bassFilter[i];
+      midSum += value * this.midFilter[i];
+      trebleSum += value * this.trebleFilter[i];
+    }
 
-    const maxEnergy = (256 * this.dataArray.length) / 32;
+    const bassEnergy = bassSum / length;
+    const midEnergy = midSum / length;
+    const trebleEnergy = trebleSum / length;
+
+    const maxEnergy = (256 * this.freqDataArray.length) / 32;
     let volume = Math.max(bassEnergy, midEnergy, trebleEnergy) / maxEnergy;
 
-    return {
+    this.renderData = {
       color: [
         bassEnergy / maxEnergy,
         midEnergy / maxEnergy,
